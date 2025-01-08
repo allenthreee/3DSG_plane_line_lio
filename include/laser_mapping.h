@@ -132,6 +132,12 @@ class LaserMapping {
     ros::Publisher pub_odom_aft_mapped_;
     ros::Publisher pub_path_;
 
+    // YWY plane visualize related
+    ros::Publisher ywy_plane_marker_array_pub_;
+    std::vector<PlaneWithCentroid> main_all_planes_world_;
+    // YWY plane visualize related
+
+
     std::mutex mtx_buffer_;
     std::deque<double> time_buffer_;
     std::deque<PointCloudType::Ptr> lidar_buffer_;

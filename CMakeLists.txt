@@ -1,7 +1,4 @@
 cmake_minimum_required(VERSION 3.5)
-
-set(CMAKE_C_COMPILER /usr/bin/gcc-9)
-set(CMAKE_CXX_COMPILER /usr/bin/g++-9)
 project(faster_lio)
 
 set(DEFAULT_BUILD_TYPE "Release")
@@ -14,10 +11,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -fexceptions -g -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS}")
 
-find_package(OpenMP REQUIRED)
-
-add_definitions(-DGLOG_USE_GLOG_EXPORT)
-# add_definitions(-DGLOG_USE_GLOG_EXPORT)
 add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 add_subdirectory(thirdparty/livox_ros_driver)
 
@@ -25,7 +18,6 @@ include(cmake/packages.cmake)
 
 #definitions
 add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
-add_definitions(-DLIOSAMNOLOG)
 
 # options
 option(WITH_IVOX_NODE_TYPE_PHC "Use PHC instead of default ivox node" OFF)

@@ -2,8 +2,7 @@
 
 #include <vector>
 #include <list>
-
-#include <glog/logging.h>
+// #include <glog/logging.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/search/kdtree.h>
 #include <visualization_msgs/Marker.h>
@@ -14,6 +13,17 @@
 #include "sac_model_plane.h"
 #include "ransac.h"
 //#include "timer.h"
+#include <ros/ros.h>
+
+#include <Eigen/Dense>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf/transform_listener.h>
+#include <tf/transform_datatypes.h>
+#include <tf/transform_broadcaster.h>
+#include <tf2/LinearMath/Quaternion.h>
+
+#include "sac_model_plane.h"
+
 
 
 
@@ -49,6 +59,7 @@ class PlaneTracker {
     inline std::vector<PlaneWithCentroid> &LastPlanes() { return all_planes_world_; }
     
     inline PointCloudPtr CurrCloudPlane() { return curr_cloud_plane_; }
+    inline std::vector<PlaneWithCentroid> &AllWorldPlane() { return all_planes_world_; }
     
     inline PointCloudPtr CurrCloudOther() { return curr_cloud_other_; }
   
@@ -64,7 +75,7 @@ class PlaneTracker {
     
     std::vector<PlaneWithCentroid> curr_planes_local_;
     std::vector<PlaneWithCentroid> all_planes_world_;
-    
+
     static const double kAngleEpsilon;
 };
 
@@ -91,8 +102,8 @@ void PlaneTracker<PointType>::ExtractLargePlanes(PointCloudPtr pc,
         ExtractLargePlanes(pc, (Eigen::Matrix4f *) nullptr);
         return;
     }
-    LOG_ASSERT(rpyxyz_wl_init_guess != nullptr) <<
-             "Please provide initial guess if using incremental fitting.";
+    // LOG_ASSERT(rpyxyz_wl_init_guess != nullptr) <<
+    //          "Please provide initial guess if using incremental fitting.";
     Eigen::Affine3f T_w_lnp1;
     pcl::getTransformation(rpyxyz_wl_init_guess[3], rpyxyz_wl_init_guess[4], rpyxyz_wl_init_guess[5], rpyxyz_wl_init_guess[0],
                        rpyxyz_wl_init_guess[1], rpyxyz_wl_init_guess[2], T_w_lnp1);
@@ -108,8 +119,8 @@ void PlaneTracker<PointType>::ExtractLargePlanes(PointCloudPtr pc,
         ExtractLargePlanes(pc, (Eigen::Matrix4f *) nullptr);
         return;
     }
-    LOG_ASSERT(t_wl_init_guess != nullptr && q_wl_init_guess != nullptr) <<
-             "Please provide initial guess if using incremental fitting.";
+    // LOG_ASSERT(t_wl_init_guess != nullptr && q_wl_init_guess != nullptr) <<
+    //          "Please provide initial guess if using incremental fitting.";
     Eigen::Matrix4f trans = Eigen::Matrix4f::Identity();
     trans.template block<3, 3>(0, 0) = q_wl_init_guess->toRotationMatrix();
     trans.template block<3, 1>(0, 3) = *t_wl_init_guess;
@@ -119,15 +130,15 @@ void PlaneTracker<PointType>::ExtractLargePlanes(PointCloudPtr pc,
 template<class PointType>
 void PlaneTracker<PointType>::ExtractLargePlanes(PointCloudPtr pc,
                         Eigen::Matrix4f *T_wl_init_guess/* = nullptr*/) {
-    LOG_ASSERT(n_least_points_on_a_plane_ > 0) <<
-         "illegal n_least_points_on_a_plane_: " << n_least_points_on_a_plane_;
+    // LOG_ASSERT(n_least_points_on_a_plane_ > 0) <<
+    //      "illegal n_least_points_on_a_plane_: " << n_least_points_on_a_plane_;
     pcl::copyPointCloud(*pc, *curr_cloud_);
     size_t original = curr_cloud_->size();
 
     std::vector<PlaneWithCentroid> planes_init_guess;
     if (is_incremental_fitting_ && !LastPlanes().empty()) {
-        LOG_ASSERT(T_wl_init_guess != nullptr) <<
-             "Please provide initial guess if using incremental fitting.";
+        // LOG_ASSERT(T_wl_init_guess != nullptr) <<
+        //      "Please provide initial guess if using incremental fitting.";
         // compute plane initial guess here
         for (auto &plane_world : all_planes_world_) {
             PlaneWithCentroid plane_lnp1;
@@ -160,6 +171,7 @@ void PlaneTracker<PointType>::ExtractLargePlanes(PointCloudPtr pc,
     curr_cloud_plane_ = ransac.GetSampleConsensusModel()->GetInliersCloud();
     // curr_cloud_ is now the remaining points
     curr_cloud_other_ = curr_cloud_;
+    // std::cout << "YWY ExtractLargePlanes() called!" << std::endl;
 }
 
 
@@ -220,9 +232,65 @@ void PlaneTracker<PointType>::TransCurrPlanes(Eigen::Matrix4f &trans, Eigen::Mat
     }
 }
 
+
+
+
 template <class PointType>
 void PlaneTracker<PointType>::SetPlaneLeastInliers(int n_least_inliers) {
-    LOG_ASSERT(n_least_inliers > 0);
+    // LOG_ASSERT(n_least_inliers > 0);
     n_least_points_on_a_plane_ = n_least_inliers;
 }
+
+//  YWY plane_centroid to rviz marker
+
+// Function to calculate the quaternion from the normal vector
+tf2::Quaternion calculateQuaternion(const Eigen::Vector3f &normal) {
+    // Assuming the normal vector is already normalized
+    Eigen::Vector3f zAxis(0, 0, 1); // Reference axis
+    Eigen::Vector3f axis = zAxis.cross(normal);
+    float angle = acos(zAxis.dot(normal));
+
+    tf2::Quaternion quaternion;
+    quaternion.setRotation(tf2::Vector3(axis[0], axis[1], axis[2]), angle);
+    return quaternion;
+};
+
+// Main function to transform planes and visualize them
+visualization_msgs::MarkerArray planeWithCentroid2RvizMarkerArray(std::vector<PlaneWithCentroid> &all_planes_world) {
+    visualization_msgs::MarkerArray marker_array;
+
+    for (auto &world_plane : all_planes_world) {
+        // Calculate the quaternion for the plane orientation
+        tf2::Quaternion quaternion = calculateQuaternion(world_plane.coef.head<3>());
+
+        // Create the marker
+        visualization_msgs::Marker marker;
+        marker.header.frame_id = "camera_init";
+        marker.header.stamp = ros::Time::now();
+        // marker.ns = "ywy_planes";
+        marker.id = marker_array.markers.size(); // Unique ID for each marker
+        marker.type = visualization_msgs::Marker::CUBE;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = world_plane.centroid[0];
+        marker.pose.position.y = world_plane.centroid[1];
+        marker.pose.position.z = world_plane.centroid[2];
+        marker.pose.orientation.x = quaternion.x();
+        marker.pose.orientation.y = quaternion.y();
+        marker.pose.orientation.z = quaternion.z();
+        marker.pose.orientation.w = quaternion.w();
+        marker.scale.x = 15.0; // 5m x 5m square
+        marker.scale.y = 15.0;
+        marker.scale.z = 0.2; // Thin plane
+        marker.color.a = 0.8; // Transparency
+        marker.color.r = 0.0;
+        marker.color.g = 1.0;
+        marker.color.b = 0.0;
+
+        marker_array.markers.push_back(marker);
+    }
+
+    return marker_array;
+};
+
+//  YWY plane_centroid to rviz marker
 

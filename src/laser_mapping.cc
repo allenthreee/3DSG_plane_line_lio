@@ -6,6 +6,7 @@
 #include "laser_mapping.h"
 #include "use-ikfom.hpp"
 #include "utils.h"
+#include "plane_tracker.h"
 
 namespace faster_lio {
 
@@ -276,6 +277,7 @@ void LaserMapping::SubAndPubToROS(ros::NodeHandle &nh) {
     path_.header.stamp = ros::Time::now();
     path_.header.frame_id = "camera_init";
 
+    ywy_plane_marker_array_pub_ = nh.advertise<visualization_msgs::MarkerArray>("plane_markers", 10);
     pub_laser_cloud_world_ = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
     pub_laser_cloud_body_ = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
     pub_laser_cloud_effect_world_ = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_effect_world", 100000);
@@ -336,6 +338,7 @@ void LaserMapping::Run() {
         }
         scan_down_body_plane_ = plane_tracker_.CurrCloudPlane();
         scan_down_body_other_ = plane_tracker_.CurrCloudOther();
+        main_all_planes_world_ = plane_tracker_.AllWorldPlane();
 //        D_RECORD_TIME_END("ExtractLargePlanes");
     }
     if (is_extract_large_planes_) {
@@ -973,6 +976,11 @@ void LaserMapping::PublishFrameWorld() {
     if (!(run_in_offline_ == false && scan_pub_en_) && !pcd_save_en_) {
         return;
     }
+    // YWY Publish plane_markers
+    visualization_msgs::MarkerArray plane_marker_array = planeWithCentroid2RvizMarkerArray(main_all_planes_world_);
+    ywy_plane_marker_array_pub_.publish(plane_marker_array);
+    std::cout << "ywy plane published with" << main_all_planes_world_.size() << "planes" << std::endl;
+    // publish registered key frame
 
     PointCloudType::Ptr laserCloudWorld;
     if (dense_pub_en_) {
